@@ -43,8 +43,11 @@ async def start_handler(message: Message):
     await message.answer(response)
     
 
-@dp.message(lambda message: message.text and message.text.lower().startswith("!банк"))
+@dp.message(F.text.startswith("!"))
 async def show_bank(message: Message):
+    if not message.text.lower() in ['! банк', '!банк']:
+        return
+    
     user_id = message.from_user.id
     username = message.from_user.username or f"пользователь (ID: {user_id})"
     
