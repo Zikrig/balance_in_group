@@ -80,3 +80,9 @@ class Database:
     async def get_all_users(self):
         async with self.pool.acquire() as connection:
             return await connection.fetch('SELECT * FROM users ORDER BY club_points DESC')
+        
+    async def delete_user(self, tg_id):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                'DELETE FROM users WHERE tg_id = $1', tg_id
+            )

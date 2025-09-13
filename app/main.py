@@ -19,6 +19,25 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 db = Database(DB_URL)
 
+# Добавим в ADMIN_COMMANDS описание новых команд
+ADMIN_COMMANDS = """
+👑 Администраторские команды:
+
+Изменить баланс Очков Клуба на [число] @username - Изменить очки клуба
+Изменить баланс Кредитного рейтинга на [число] @username - Изменить кредитный рейтинг
+Добавить Очки Клуба [число] @username - Добавить очки клуба
+Убрать Очки Клуба [число] @username - Убрать очки клуба
+Добавить Кредитный рейтинг [число] @username - Добавить кредитный рейтинг
+Убрать Кредитный рейтинг [число] @username - Убрать кредитный рейтинг
+Удалить пользователя @username - Удалить пользователя
+/банк_статистика - Показать статистику всех пользователей
+
+💡 Примеры:
+Изменить баланс Очков Клуба на 100.5 @ivanov
+Добавить Очки Клуба 50 @petrov
+Удалить пользователя @noname
+"""
+
 USER_COMMANDS = """
 🤖 Банковский бот - список команд:
 
@@ -28,17 +47,6 @@ USER_COMMANDS = """
 💡 Просто скопируйте нужную команду и отправьте в чат
 """
 
-ADMIN_COMMANDS = """
-👑 Администраторские команды:
-
-Изменить баланс Очков Клуба на [число] @username - Изменить очки клуба
-Изменить баланс Кредитного рейтинга на [число] @username - Изменить кредитный рейтинг
-/банк_статистика - Показать статистику всех пользователей
-
-💡 Примеры:
-Изменить баланс Очков Клуба на 100.5 @ivanov
-Изменить баланс Кредитного рейтинга на -50.75 @petrov
-"""
 
 @dp.message(IsAdmin(), F.text.startswith("/start"))
 async def start_handler(message: Message):
@@ -49,6 +57,70 @@ async def start_handler(message: Message):
 async def start_handler(message: Message):
     response = USER_COMMANDS
     await message.answer(response)
+    
+# Обработчик удаления пользователя
+@dp.message(IsAdmin(), F.text.startswith("Удалить пользователя"))
+async def delete_user_cmd(message: Message):
+    pattern = r"Удалить пользователя @(\w+)"
+    match = re.search(pattern, message.text)
+    
+    if not match:
+        await message.reply("❌ Неправильный формат команды. Пример: Удалить пользователя @username")
+        return
+    
+    username = match.group(1)
+    user = await db.get_user_by_username(username)
+    
+    if not user:
+        await message.reply(f"❌ Пользователь @{username} не найден")
+        return
+    
+    await db.delete_user(user['tg_id'])
+    await message.reply(f"✅ Пользователь @{username} удален")
+
+# Обработчики для добавления/убавления баллов
+@dp.message(IsAdmin(), F.text.startswith("Добавить Очки Клуба"))
+async def add_club_points(message: Message):
+    await adjust_points(message, "club_points", 1)
+
+@dp.message(IsAdmin(), F.text.startswith("Убрать Очки Клуба"))
+async def remove_club_points(message: Message):
+    await adjust_points(message, "club_points", -1)
+
+@dp.message(IsAdmin(), F.text.startswith("Добавить Кредитный рейтинг"))
+async def add_credit_rating(message: Message):
+    await adjust_points(message, "credit_rating", 1)
+
+@dp.message(IsAdmin(), F.text.startswith("Убрать Кредитный рейтинг"))
+async def remove_credit_rating(message: Message):
+    await adjust_points(message, "credit_rating", -1)
+
+# Общая функция для изменения баллов
+async def adjust_points(message: Message, field: str, multiplier: int):
+    pattern = rf"(Добавить|Убрать) {'Очки Клуба' if 'Очки' in message.text else 'Кредитный рейтинг'}\s+([-+]?\d*\.?\d+)\s+@(\w+)"
+    match = re.search(pattern, message.text)
+    
+    if not match:
+        await message.reply(f"❌ Неправильный формат команды. Пример: {'Добавить' if multiplier > 0 else 'Убрать'} {'Очки Клуба' if field == 'club_points' else 'Кредитный рейтинг'} 50 @username")
+        return
+    
+    points = float(match.group(2)) * multiplier
+    username = match.group(3)
+    
+    user = await db.get_user_by_username(username)
+    if not user:
+        await message.reply(f"❌ Пользователь @{username} не найден")
+        return
+    
+    current_value = user.get(field, 0)
+    new_value = current_value + points
+    
+    if field == 'club_points':
+        await db.update_club_points(user['tg_id'], new_value)
+    else:
+        await db.update_credit_rating(user['tg_id'], new_value)
+    
+    await message.reply(f"✅ {'Добавлено' if multiplier > 0 else 'Убрано'} {abs(points):.2f} {'очков клуба' if field == 'club_points' else 'кредитного рейтинга'} пользователю @{username}. Новое значение: {new_value:.2f}")
     
 
 @dp.message(F.text.startswith("!"))
