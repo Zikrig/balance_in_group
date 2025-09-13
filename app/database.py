@@ -10,13 +10,11 @@ class Database:
 
     async def create_table(self):
         async with self.pool.acquire() as connection:
-            # Сначала проверяем существование таблицы
             table_exists = await connection.fetchval(
                 "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')"
             )
             
             if table_exists:
-                # Проверяем наличие столбцов
                 for column in ['username', 'club_points', 'credit_rating']:
                     column_exists = await connection.fetchval(
                         f"SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = '{column}')"
@@ -25,15 +23,14 @@ class Database:
                         if column == 'username':
                             await connection.execute('ALTER TABLE users ADD COLUMN username VARCHAR(100)')
                         else:
-                            await connection.execute(f'ALTER TABLE users ADD COLUMN {column} INTEGER DEFAULT 0')
+                            await connection.execute(f'ALTER TABLE users ADD COLUMN {column} REAL DEFAULT 0')  # Изменено на REAL
             else:
-                # Создаем таблицу с правильной структурой
                 await connection.execute('''
                     CREATE TABLE users (
                         tg_id BIGINT PRIMARY KEY,
                         username VARCHAR(100),
-                        club_points INTEGER DEFAULT 0,
-                        credit_rating INTEGER DEFAULT 0
+                        club_points REAL DEFAULT 0,  # Изменено на REAL
+                        credit_rating REAL DEFAULT 0  # Изменено на REAL
                     )
                 ''')
 
@@ -51,21 +48,18 @@ class Database:
 
     async def create_user(self, tg_id, username):
         async with self.pool.acquire() as connection:
-            # Проверяем, существует ли пользователь
             user_exists = await connection.fetchval(
                 'SELECT EXISTS (SELECT 1 FROM users WHERE tg_id = $1)', tg_id
             )
             
             if user_exists:
-                # Обновляем username если пользователь существует
                 await connection.execute(
                     'UPDATE users SET username = $1 WHERE tg_id = $2',
                     username, tg_id
                 )
             else:
-                # Создаем нового пользователя со всеми полями
                 await connection.execute(
-                    'INSERT INTO users (tg_id, username, club_points, credit_rating) VALUES ($1, $2, 0, 0)',
+                    'INSERT INTO users (tg_id, username, club_points, credit_rating) VALUES ($1, $2, 0.0, 0.0)',  # Изменено на 0.0
                     tg_id, username
                 )
 
